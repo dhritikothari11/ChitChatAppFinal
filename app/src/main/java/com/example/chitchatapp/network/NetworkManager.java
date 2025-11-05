@@ -1,3 +1,5 @@
+
+
 package com.example.chitchatapp.network;
 
 import android.content.Context;
@@ -21,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import com.example.chitchatapp.utils.EncryptionUtil;
 
 public class NetworkManager {
 
@@ -123,36 +126,48 @@ public class NetworkManager {
                     username = "Guest-" + System.currentTimeMillis() % 1000;
 
                 clientWriters.add(writer);
-                broadcastMessage(username, "has joined the chat.");
+
+                // ENCRYPT join message for network, send UNENCRYPTED to local UI
+                String joinMsgEncrypted = EncryptionUtil.encrypt("has joined the chat.");
+                if (joinMsgEncrypted != null) {
+                    broadcastMessage(username, joinMsgEncrypted);
+                }
                 messageReceiver.onMessageReceived(username, "has joined the chat.");
 
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (line.trim().isEmpty()) continue;
 
-                    Log.d(TAG, "Host received: " +
-                            (line.length() > 120 ? line.substring(0, 120) + "..." : line));
+                    // Decrypt the received line
+                    String decryptedLine = EncryptionUtil.decrypt(line);
+                    if (decryptedLine == null) {
+                        Log.e(TAG, "Failed to decrypt message from client.");
+                        continue;
+                    }
 
-                    if (line.startsWith("LIKE:") || line.startsWith("UNLIKE:")
-                            || line.startsWith("EDIT:") || line.startsWith("DELETE:")) {
-                        broadcastCommand(line);
-                        processCommand(line);
+                    Log.d(TAG, "Host received: " +
+                            (decryptedLine.length() > 120 ? decryptedLine.substring(0, 120) + "..." : decryptedLine));
+
+                    if (decryptedLine.startsWith("LIKE:") || decryptedLine.startsWith("UNLIKE:")
+                            || decryptedLine.startsWith("EDIT:") || decryptedLine.startsWith("DELETE:")) {
+                        broadcastCommand(line); // Broadcast ENCRYPTED line to other clients
+                        processCommand(decryptedLine); // Process DECRYPTED line locally
                         continue;
                     }
 
                     // Images (no username prefix)
-                    if (line.startsWith("IMG:")) {
-                        broadcastRaw(line);
-                        String[] parts = line.split(":", 4);
+                    if (decryptedLine.startsWith("IMG:")) {
+                        broadcastRaw(line); // Broadcast ENCRYPTED line
+                        String[] parts = decryptedLine.split(":", 4);
                         if (parts.length == 4)
                             messageReceiver.onImageReceived(parts[1], parts[2], parts[3]);
                         continue;
                     }
 
                     // Documents (no username prefix)
-                    if (line.startsWith("DOC:")) {
-                        broadcastRaw(line);
-                        String[] parts = line.split(":", 5);
+                    if (decryptedLine.startsWith("DOC:")) {
+                        broadcastRaw(line); // Broadcast ENCRYPTED line
+                        String[] parts = decryptedLine.split(":", 5);
                         if (parts.length == 5) {
                             try {
                                 long size = Long.parseLong(parts[3]);
@@ -165,8 +180,8 @@ public class NetworkManager {
                     }
 
                     // Normal chat text
-                    broadcastMessage(username, line);
-                    messageReceiver.onMessageReceived(username, line);
+                    broadcastMessage(username, line); // Broadcast ENCRYPTED line with username
+                    messageReceiver.onMessageReceived(username, decryptedLine); // Process DECRYPTED line
                 }
 
             } catch (Exception e) {
@@ -198,31 +213,38 @@ public class NetworkManager {
                 while ((line = clientReader.readLine()) != null) {
                     if (line.trim().isEmpty()) continue;
 
+                    // Decrypt the received line
+                    String decryptedLine = EncryptionUtil.decrypt(line);
+                    if (decryptedLine == null) {
+                        Log.e(TAG, "Failed to decrypt message from host.");
+                        continue;
+                    }
+
                     Log.d(TAG, "Client received: " +
-                            (line.length() > 120 ? line.substring(0, 120) + "..." : line));
+                            (decryptedLine.length() > 120 ? decryptedLine.substring(0, 120) + "..." : decryptedLine));
 
-                    if (line.startsWith("LIKE:")) { messageReceiver.onMessageLiked(line.substring(5), true); continue; }
-                    if (line.startsWith("UNLIKE:")) { messageReceiver.onMessageLiked(line.substring(7), false); continue; }
+                    if (decryptedLine.startsWith("LIKE:")) { messageReceiver.onMessageLiked(decryptedLine.substring(5), true); continue; }
+                    if (decryptedLine.startsWith("UNLIKE:")) { messageReceiver.onMessageLiked(decryptedLine.substring(7), false); continue; }
 
-                    if (line.startsWith("EDIT:")) {
-                        String[] parts = line.substring(5).split(":", 2);
+                    if (decryptedLine.startsWith("EDIT:")) {
+                        String[] parts = decryptedLine.substring(5).split(":", 2);
                         if (parts.length == 2) messageReceiver.onMessageEdited(parts[0], parts[1]);
                         continue;
                     }
 
-                    if (line.startsWith("DELETE:")) { messageReceiver.onMessageDeleted(line.substring(7)); continue; }
+                    if (decryptedLine.startsWith("DELETE:")) { messageReceiver.onMessageDeleted(decryptedLine.substring(7)); continue; }
 
                     // Image
-                    if (line.startsWith("IMG:")) {
-                        String[] parts = line.split(":", 4);
+                    if (decryptedLine.startsWith("IMG:")) {
+                        String[] parts = decryptedLine.split(":", 4);
                         if (parts.length == 4)
                             messageReceiver.onImageReceived(parts[1], parts[2], parts[3]);
                         continue;
                     }
 
                     // Document
-                    if (line.startsWith("DOC:")) {
-                        String[] parts = line.split(":", 5);
+                    if (decryptedLine.startsWith("DOC:")) {
+                        String[] parts = decryptedLine.split(":", 5);
                         if (parts.length == 5) {
                             try {
                                 long size = Long.parseLong(parts[3]);
@@ -235,8 +257,8 @@ public class NetworkManager {
                     }
 
                     // Regular message
-                    if (line.contains(": ")) {
-                        String[] parts = line.split(": ", 2);
+                    if (decryptedLine.contains(": ")) {
+                        String[] parts = decryptedLine.split(": ", 2);
                         if (parts.length == 2) messageReceiver.onMessageReceived(parts[0], parts[1]);
                     }
                 }
@@ -257,15 +279,42 @@ public class NetworkManager {
     public void sendMessage(String message) {
         executor.execute(() -> {
             try {
+                // Encrypt the message before sending
+                String encryptedMessage = EncryptionUtil.encrypt(message);
+                if (encryptedMessage == null) {
+                    Log.e(TAG, "Failed to encrypt message.");
+                    return;
+                }
+
                 if (serverSocket != null && !serverSocket.isClosed()) {
                     // 🔥 Important: send images/docs as raw (no "username:")
                     if (message.startsWith("IMG:") || message.startsWith("DOC:")) {
-                        broadcastRaw(message);
+                        // Host sending image/doc (raw)
+                        broadcastRaw(encryptedMessage);
                     } else {
-                        broadcastMessage(hostUsername, message);
+                        // Host sending normal text
+                        broadcastMessage(hostUsername, encryptedMessage);
+                    }
+                    // Handle locally for the Host's UI (must use unencrypted message for UI update)
+                    if (message.startsWith("IMG:")) {
+                        String[] parts = message.split(":", 4);
+                        if (parts.length == 4) messageReceiver.onImageReceived(parts[1], parts[2], parts[3]);
+                    } else if (message.startsWith("DOC:")) {
+                        String[] parts = message.split(":", 5);
+                        if (parts.length == 5) {
+                            try {
+                                long size = Long.parseLong(parts[3]);
+                                messageReceiver.onDocumentReceived(parts[1], parts[2], size, parts[4]);
+                            } catch (Exception e) {
+                                Log.e(TAG, "Host DOC send error", e);
+                            }
+                        }
+                    } else {
+                        messageReceiver.onMessageReceived(hostUsername, message);
                     }
                 } else if (clientWriter != null) {
-                    clientWriter.println(message);
+                    // Client sending message
+                    clientWriter.println(encryptedMessage);
                     clientWriter.flush();
                 }
             } catch (Exception e) {
@@ -288,11 +337,20 @@ public class NetworkManager {
 
     private void sendCommand(String command) {
         executor.execute(() -> {
+            // Encrypt the command too, as it's sensitive
+            String encryptedCommand = EncryptionUtil.encrypt(command);
+            if (encryptedCommand == null) {
+                Log.e(TAG, "Failed to encrypt command.");
+                return;
+            }
+
             if (serverSocket != null && !serverSocket.isClosed()) {
-                broadcastCommand(command);
-                processCommand(command);
+                // Host sending: broadcast the encrypted command
+                broadcastCommand(encryptedCommand);
+                processCommand(command); // Process the UNENCRYPTED command locally
             } else if (clientWriter != null) {
-                clientWriter.println(command);
+                // Client sending: send the encrypted command to the host
+                clientWriter.println(encryptedCommand);
                 clientWriter.flush();
             }
         });
@@ -301,11 +359,13 @@ public class NetworkManager {
     // ===============================================================
     // BROADCAST HELPERS
     // ===============================================================
-    private void broadcastMessage(String sender, String message) {
+    // The message parameter is now expected to be the ENCRYPTED content.
+    private void broadcastMessage(String sender, String encryptedMessage) {
         synchronized (clientWriters) {
             for (PrintWriter w : new ArrayList<>(clientWriters)) {
                 try {
-                    w.println(sender + ": " + message);
+                    // Prepend sender's name to the encrypted message
+                    w.println(sender + ": " + encryptedMessage);
                     w.flush();
                 } catch (Exception e) {
                     clientWriters.remove(w);
@@ -314,11 +374,12 @@ public class NetworkManager {
         }
     }
 
-    private void broadcastCommand(String command) {
+    // The command parameter is now expected to be the ENCRYPTED command.
+    private void broadcastCommand(String encryptedCommand) {
         synchronized (clientWriters) {
             for (PrintWriter w : new ArrayList<>(clientWriters)) {
                 try {
-                    w.println(command);
+                    w.println(encryptedCommand);
                     w.flush();
                 } catch (Exception e) {
                     clientWriters.remove(w);
@@ -327,11 +388,12 @@ public class NetworkManager {
         }
     }
 
-    private void broadcastRaw(String message) {
+    // The message parameter is now expected to be the ENCRYPTED raw data (IMG/DOC).
+    private void broadcastRaw(String encryptedMessage) {
         synchronized (clientWriters) {
             for (PrintWriter w : new ArrayList<>(clientWriters)) {
                 try {
-                    w.println(message);
+                    w.println(encryptedMessage);
                     w.flush();
                 } catch (Exception e) {
                     clientWriters.remove(w);
@@ -340,6 +402,7 @@ public class NetworkManager {
         }
     }
 
+    // cmd parameter is expected to be the DECRYPTED command when called from the Host's receiver or sender.
     private void processCommand(String cmd) {
         try {
             if (cmd.startsWith("LIKE:"))

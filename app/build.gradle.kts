@@ -58,4 +58,10 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+
+    // Note: If you do not use androidx.security, you can also remove this.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+// The problematic line is removed:
+// implementation("javax.crypto:javax.crypto-api:1.4")
 }
