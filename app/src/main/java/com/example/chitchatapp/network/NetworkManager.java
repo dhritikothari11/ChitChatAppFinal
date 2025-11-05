@@ -377,11 +377,14 @@ public class NetworkManager {
     // The command parameter is now expected to be the ENCRYPTED command.
     private void broadcastCommand(String encryptedCommand) {
         synchronized (clientWriters) {
+            // Create a snapshot to safely iterate while modifying the list if needed
             for (PrintWriter w : new ArrayList<>(clientWriters)) {
                 try {
                     w.println(encryptedCommand);
                     w.flush();
                 } catch (Exception e) {
+                    // Log the disconnection and remove the failed writer
+                    Log.e(TAG, "Failed to broadcast command to a client, removing writer.", e);
                     clientWriters.remove(w);
                 }
             }
