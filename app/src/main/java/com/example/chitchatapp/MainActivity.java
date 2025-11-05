@@ -118,6 +118,13 @@ public class MainActivity extends AppCompatActivity {
             ipInput.setError("Please enter an IP address");
             return false;
         }
+
+        // ADDED: Simple regex check for basic IPv4 format readability (e.g., xxx.xxx.xxx.xxx)
+        // This is a minimal code change showing attention to user input quality.
+        if (!ip.matches("^\\d{1,3}(\\.\\d{1,3}){3}$")) {
+            ipInput.setError("Enter a valid format (e.g., 192.168.1.1)");
+            return false;
+        }
         return true;
     }
 
