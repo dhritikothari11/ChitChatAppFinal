@@ -213,17 +213,22 @@ public class ChatActivity extends AppCompatActivity {
 
     private void handleImageSelection(Uri imageUri) {
         try {
-            InputStream inputStream = getContentResolver().openInputStream(imageUri);
-            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-            if (inputStream != null) inputStream.close();
+            // NEW: Use try-with-resources to ensure inputStream is automatically closed
+            try (InputStream inputStream = getContentResolver().openInputStream(imageUri)) {
+                if (inputStream == null) {
+                    Toast.makeText(this, "Failed to open image stream", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
 
-            File imageFile = saveImageToStorage(bitmap);
-            if (imageFile != null) {
-                String caption = messageInput.getText().toString().trim();
-                chatViewModel.sendImageMessage(imageFile.getAbsolutePath(), caption);
-                messageInput.setText("");
-            } else {
-                Toast.makeText(this, "Failed to process image", Toast.LENGTH_SHORT).show();
+                File imageFile = saveImageToStorage(bitmap);
+                if (imageFile != null) {
+                    String caption = messageInput.getText().toString().trim();
+                    chatViewModel.sendImageMessage(imageFile.getAbsolutePath(), caption);
+                    messageInput.setText("");
+                } else {
+                    Toast.makeText(this, "Failed to process image", Toast.LENGTH_SHORT).show();
+                }
             }
         } catch (Exception e) {
             Log.e(TAG, "Error handling image selection", e);
