@@ -1,6 +1,7 @@
 package com.example.chitchatapp;
 
 import android.app.AlertDialog;
+import android.content.Context; // ADDED: Required for getSystemService and hideKeyboard
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -145,11 +146,25 @@ public class ChatActivity extends AppCompatActivity {
             if (!text.isEmpty()) {
                 chatViewModel.sendMessage(text);
                 messageInput.setText("");
+                // ADDED: Hide keyboard after sending message
+                hideKeyboard();
             }
         });
 
         // --- Attach Button ---
         attachButton.setOnClickListener(v -> showAttachmentOptions());
+    }
+
+    // ADDED: Helper method to dismiss the software keyboard
+    private void hideKeyboard() {
+        View view = this.getCurrentFocus();
+        if (view != null) {
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) { // Null check for safety
+                imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            }
+        }
     }
 
     private void showAttachmentOptions() {
